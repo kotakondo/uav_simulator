@@ -105,7 +105,7 @@ void
 Maps::pcl2ros()
 {
     pcl::toROSMsg(*info.cloud, *info.output);
-    info.output->header.frame_id = "world";
+    info.output->header.frame_id = "map";
     RCLCPP_INFO(info.node->get_logger(), "finish: infill %lf%%",
                 info.cloud->width / (1.0 * info.sizeX * info.sizeY * info.sizeZ));
 }

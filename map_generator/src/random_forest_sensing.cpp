@@ -41,6 +41,7 @@ vector<double> _state;
 
 int _obs_num;
 double _x_size, _y_size, _z_size;
+int _seed;
 double _x_l, _x_h, _y_l, _y_h, _w_l, _w_h, _h_l, _h_h;
 double _z_limit, _sensing_range, _resolution, _sense_rate, _init_x, _init_y;
 double _min_dist;
@@ -302,7 +303,7 @@ int i = 0;
 void pubSensedPoints() {
     // 将点云转换为 ROS2 消息格式并发布
     pcl::toROSMsg(cloudMap, globalMap_pcd);
-    globalMap_pcd.header.frame_id = "world";
+    globalMap_pcd.header.frame_id = "map";
     _all_map_pub->publish(globalMap_pcd);
 
     return; // 有这个return后续的代码都不会执行
@@ -340,7 +341,7 @@ void pubSensedPoints() {
     localMap.is_dense = true;
 
     pcl::toROSMsg(localMap, localMap_pcd);
-    localMap_pcd.header.frame_id = "world";
+    localMap_pcd.header.frame_id = "map";
     _local_map_pub->publish(localMap_pcd);
 }
 
@@ -381,7 +382,7 @@ void clickCallback(const geometry_msgs::msg::PoseStamped &msg) {
     clicked_cloud_.is_dense = true;
 
     pcl::toROSMsg(clicked_cloud_, localMap_pcd);
-    localMap_pcd.header.frame_id = "world";
+    localMap_pcd.header.frame_id = "map";
     click_map_pub_->publish(localMap_pcd);
 
     cloudMap.width = cloudMap.points.size();
@@ -415,6 +416,7 @@ int main(int argc, char **argv)
     node->declare_parameter("map/resolution", 0.1);
     node->declare_parameter("map/circle_num", 30);
 
+    node->declare_parameter("ObstacleShape/seed", 1);
     node->declare_parameter("ObstacleShape/lower_rad", 0.3);
     node->declare_parameter("ObstacleShape/upper_rad", 0.8);
     node->declare_parameter("ObstacleShape/lower_hei", 3.0);
@@ -439,6 +441,7 @@ int main(int argc, char **argv)
     node->get_parameter("map/resolution", _resolution);
     node->get_parameter("map/circle_num", circle_num_);
 
+    node->get_parameter("ObstacleShape/seed", _seed);
     node->get_parameter("ObstacleShape/lower_rad", _w_l);
     node->get_parameter("ObstacleShape/upper_rad", _w_h);
     node->get_parameter("ObstacleShape/lower_hei", _h_l);
@@ -465,10 +468,8 @@ int main(int argc, char **argv)
     rclcpp::sleep_for(std::chrono::milliseconds(500));
 
     // 初始化随机数生成器
-    unsigned int seed = rd();
-    // unsigned int seed = 2433201515;
-    std::cout << "seed=" << seed << std::endl;
-    eng.seed(seed);
+    std::cout << "seed=" << _seed << std::endl;
+    eng.seed(_seed);
 
     // 生成随机地图
     // RandomMapGenerate();

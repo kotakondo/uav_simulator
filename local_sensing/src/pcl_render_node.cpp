@@ -146,7 +146,7 @@ void rcvOdometryCallback(const nav_msgs::msg::Odometry::SharedPtr odom)
 //   geometry_msgs::msg::TransformStamped transformStamped;
 
 //   transformStamped.header.stamp = rclcpp::Clock().now();
-//   transformStamped.header.frame_id = "world";
+//   transformStamped.header.frame_id = "map";
 //   transformStamped.child_frame_id = "camera";
 
 //   transformStamped.transform.translation.x = cam2world(0, 3);
@@ -174,7 +174,7 @@ void pubCameraPose()
   camera_pose.pose.orientation.y = cam2world_quat.y();
   camera_pose.pose.orientation.z = cam2world_quat.z();
 
-  pub_pose->publish(camera_pose);  
+  pub_pose->publish(camera_pose);
 }
 
 // 基于当前的传感器信息和无人机位置，渲染感知到的点云信息
@@ -298,7 +298,7 @@ void render_pcl_world()
     // 信息格式转换
     sensor_msgs::msg::PointCloud2 local_map_pcl;
     pcl::toROSMsg(localMap, local_map_pcl);
-    local_map_pcl.header.frame_id = "/map";
+    local_map_pcl.header.frame_id = "map";
     local_map_pcl.header.stamp = last_odom_stamp; // 使用当前时间戳
 
     // 发布点云
@@ -424,8 +424,7 @@ int main(int argc, char **argv) {
   pub_depth = node->create_publisher<sensor_msgs::msg::Image>("depth", 1000);
   pub_color = node->create_publisher<sensor_msgs::msg::Image>("colordepth", 1000);
   pub_pose = node->create_publisher<geometry_msgs::msg::PoseStamped>("camera_pose", 1000);
-  // pub_pcl_world = node->create_publisher<sensor_msgs::msg::PointCloud2>("rendered_pcl", 1);
-  pub_pcl_world = node->create_publisher<sensor_msgs::msg::PointCloud2>("pcl_render_node/cloud", 1);
+  pub_pcl_world = node->create_publisher<sensor_msgs::msg::PointCloud2>("sensor_point_cloud", 1);
 
   // Set up timers for sensing and estimation
   double sensing_duration = 1.0 / sensing_rate;

@@ -99,7 +99,7 @@ void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     // Pose
     poseROS.header = msg->header;
     poseROS.header.stamp = msg->header.stamp;
-    poseROS.header.frame_id = string("world");
+    poseROS.header.frame_id = string("map");
     poseROS.pose.position.x = pose(0);
     poseROS.pose.position.y = pose(1);
     poseROS.pose.position.z = pose(2);
@@ -116,7 +116,7 @@ void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     yprVel(1) = -atan2(vel(2), norm(vel.rows(0, 1), 2));
     yprVel(2) = 0;
     q = R_to_quaternion(ypr_to_R(yprVel));
-    velROS.header.frame_id = string("world");
+    velROS.header.frame_id = string("map");
     velROS.header.stamp = msg->header.stamp;
     velROS.ns = string("velocity");
     velROS.id = 0;
@@ -186,7 +186,7 @@ void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
                 }
             }
         }
-        covROS.header.frame_id = string("world");
+        covROS.header.frame_id = string("map");
         covROS.header.stamp = msg->header.stamp;
         covROS.ns = string("covariance");
         covROS.id = 0;
@@ -234,7 +234,7 @@ void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
                     }
                 }
             }
-            covVelROS.header.frame_id = string("world");
+            covVelROS.header.frame_id = string("map");
             covVelROS.header.stamp = msg->header.stamp;
             covVelROS.ns = string("covariance_velocity");
             covVelROS.id = 0;
@@ -265,7 +265,7 @@ void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     rclcpp::Time t = msg->header.stamp;
     if ((t - pt).seconds() > 0.5)
     {
-        trajROS.header.frame_id = string("world");
+        trajROS.header.frame_id = string("map");
         trajROS.header.stamp = rclcpp::Clock().now();
         trajROS.ns = string("trajectory");
         trajROS.type = visualization_msgs::msg::Marker::LINE_LIST;
@@ -306,7 +306,7 @@ void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
     }
 
     // Sensor availability
-    sensorROS.header.frame_id = string("world");
+    sensorROS.header.frame_id = string("map");
     sensorROS.header.stamp = msg->header.stamp;
     sensorROS.ns = string("sensor");
     sensorROS.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
@@ -414,7 +414,7 @@ void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
         // 发布 world -> base_s
         geometry_msgs::msg::TransformStamped transformStamped;
         transformStamped.header.stamp = msg->header.stamp; // 时间戳
-        transformStamped.header.frame_id = "world";        // 父坐标系
+        transformStamped.header.frame_id = "map";        // 父坐标系
         transformStamped.child_frame_id = base_s;          // 子坐标系
         transformStamped.transform.translation.x = transform.getOrigin().x();
         transformStamped.transform.translation.y = transform.getOrigin().y();
@@ -514,7 +514,7 @@ int main(int argc, char **argv)
     node->declare_parameter("color/a", 1.0);
     node->declare_parameter("origin", false);
     node->declare_parameter("robot_scale", 2.0);
-    node->declare_parameter("frame_id", "world");
+    node->declare_parameter("frame_id", "map");
 
     node->declare_parameter("cross_config", false);
     node->declare_parameter("tf45", false);

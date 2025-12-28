@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
       "odometry", 50, rcvOdometryCallbck);
 
   // 发布者：点云数据
-  pub_cloud = node->create_publisher<sensor_msgs::msg::PointCloud2>("pcl_render_node/cloud", 10);
+  pub_cloud = node->create_publisher<sensor_msgs::msg::PointCloud2>("sensor_point_cloud", 10);
 
   // 定时器：控制渲染频率
   double sensing_duration = 1.0 / sensing_rate * 2.5;

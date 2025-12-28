@@ -28,7 +28,7 @@ void pubOdom()
 {
     auto odom = nav_msgs::msg::Odometry();
     odom.header.stamp = rclcpp::Clock().now();
-    odom.header.frame_id = "world";
+    odom.header.frame_id = "map";
 
     if (rcv_cmd)
     {
