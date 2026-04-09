@@ -75,17 +75,24 @@ Eigen::Matrix4d cam2world;
 Eigen::Quaterniond cam2world_quat;
 nav_msgs::msg::Odometry _odom;
 
-double sensing_horizon, sensing_rate, estimation_rate; 
+double sensing_horizon, sensing_rate, estimation_rate;
 double _x_size, _y_size, _z_size;
 double _gl_xl, _gl_yl, _gl_zl;
 double _resolution, _inv_resolution;
 int _GLX_SIZE, _GLY_SIZE, _GLZ_SIZE;
+
+// Sphere sensing mode (fake_sim only): when enabled, sensed pointcloud is the
+// global cloud filtered by a sphere around the agent instead of a depth-camera frustum.
+bool use_sphere_sensing = false;
+double sphere_sensing_radius = 5.0;
+pcl::PointCloud<pcl::PointXYZ>::Ptr global_cloud_ptr;
 
 rclcpp::Time last_odom_stamp = rclcpp::Time::max();
 Eigen::Vector3d last_pose_world;
 
 void render_currentpose();
 void render_pcl_world();
+void render_pcl_sphere();
 
 inline Eigen::Vector3d gridIndex2coord(const Eigen::Vector3i & index) 
 {
@@ -179,13 +186,20 @@ void pubCameraPose()
 
 // 基于当前的传感器信息和无人机位置，渲染感知到的点云信息
 void renderSensedPoints()
-{ 
+{
   //if(! has_global_map || ! has_odom) return;
   // 检查地图的可用性
   if( !has_global_map && !has_local_map) return;
-  
+
   // 检查姿态可用性
   if( !has_odom ) return;
+
+  if (use_sphere_sensing) {
+    // Sphere sensing: skip the CUDA depth render entirely.
+    render_pcl_sphere();
+    return;
+  }
+
   render_currentpose();
   render_pcl_world();
 }
@@ -202,7 +216,10 @@ void rcvGlobalPointCloudCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr 
   // Load global map
   pcl::PointCloud<pcl::PointXYZ> cloudIn;
   pcl::PointXYZ pt_in;
-  pcl::fromROSMsg(*pointcloud_map, cloudIn); 
+  pcl::fromROSMsg(*pointcloud_map, cloudIn);
+
+  // Cache as PCL cloud for sphere sensing mode (radial filter, no projection).
+  global_cloud_ptr.reset(new pcl::PointCloud<pcl::PointXYZ>(cloudIn));
 
   for(int i = 0; i < int(cloudIn.points.size()); i++){
     pt_in = cloudIn.points[i];
@@ -305,6 +322,40 @@ void render_pcl_world()
     pub_pcl_world->publish(local_map_pcl);
 }
 
+// Sphere sensing: emit all global-cloud points within sphere_sensing_radius
+// of the current agent position. No camera projection, no GPU.
+void render_pcl_sphere()
+{
+    if (!global_cloud_ptr) return;
+
+    pcl::PointCloud<pcl::PointXYZ> localMap;
+    localMap.points.reserve(global_cloud_ptr->points.size());
+    const double r2 = sphere_sensing_radius * sphere_sensing_radius;
+    const double cx_w = last_pose_world(0);
+    const double cy_w = last_pose_world(1);
+    const double cz_w = last_pose_world(2);
+
+    for (const auto& p : global_cloud_ptr->points) {
+        const double dx = p.x - cx_w;
+        const double dy = p.y - cy_w;
+        const double dz = p.z - cz_w;
+        if (dx * dx + dy * dy + dz * dz <= r2) {
+            localMap.points.push_back(p);
+        }
+    }
+
+    localMap.width = localMap.points.size();
+    localMap.height = 1;
+    localMap.is_dense = true;
+
+    sensor_msgs::msg::PointCloud2 sphere_map_pcl;
+    pcl::toROSMsg(localMap, sphere_map_pcl);
+    sphere_map_pcl.header.frame_id = "map";
+    sphere_map_pcl.header.stamp = last_odom_stamp;
+
+    pub_pcl_world->publish(sphere_map_pcl);
+}
+
 // 无需传递时间，直接使用 ROS2 时钟来获取当前时间
 void render_currentpose()
 {
@@ -380,6 +431,8 @@ int main(int argc, char **argv) {
   node->declare_parameter("map/x_size", 10.0);
   node->declare_parameter("map/y_size", 10.0);
   node->declare_parameter("map/z_size", 10.0);
+  node->declare_parameter("use_sphere_sensing", false);
+  node->declare_parameter("sphere_sensing_radius", 5.0);
 
   // Get parameters
   node->get_parameter("cam_width", width);
@@ -394,6 +447,11 @@ int main(int argc, char **argv) {
   node->get_parameter("map/x_size", _x_size);
   node->get_parameter("map/y_size", _y_size);
   node->get_parameter("map/z_size", _z_size);
+  node->get_parameter("use_sphere_sensing", use_sphere_sensing);
+  node->get_parameter("sphere_sensing_radius", sphere_sensing_radius);
+
+  std::cout << "[pcl_render_node] use_sphere_sensing=" << use_sphere_sensing
+            << " sphere_sensing_radius=" << sphere_sensing_radius << std::endl;
 
   std::cout<< "camera parameter" << fx << fy << cx << cy << width << height << std::endl;
   depthrender.set_para(fx, fy, cx, cy, width, height);

@@ -43,6 +43,11 @@ double _gl_xl, _gl_yl, _gl_zl;
 double _resolution, _inv_resolution;
 int _GLX_SIZE, _GLY_SIZE, _GLZ_SIZE;
 
+// Sphere sensing mode (fake_sim only): when enabled, sensed pointcloud is the
+// global cloud filtered by a sphere around the agent — no FOV cone or yaw cone.
+bool use_sphere_sensing = false;
+double sphere_sensing_radius = 5.0;
+
 rclcpp::Time last_odom_stamp = rclcpp::Time(0, 0, RCL_ROS_TIME);
 
 inline Eigen::Vector3d gridIndex2coord(const Eigen::Vector3i& index) {
@@ -126,25 +131,30 @@ void renderSensedPoints(/*const rclcpp::TimerBase event*/) {
   _pointRadiusSquaredDistance.clear();
 
   pcl::PointXYZ pt;
+  // Sphere sensing mode: pure radial filter (no elevation cone, no yaw cone).
+  // Uses sphere_sensing_radius instead of the camera-FOV sensing_horizon.
+  const double search_radius = use_sphere_sensing ? sphere_sensing_radius : sensing_horizon;
   // 进行半径搜索获取感知范围内的点
-  if (_kdtreeLocalMap.radiusSearch(searchPoint, sensing_horizon,
+  if (_kdtreeLocalMap.radiusSearch(searchPoint, search_radius,
                                    _pointIdxRadiusSearch,
                                    _pointRadiusSquaredDistance) > 0) {
     // 遍历每个搜索到的点
     for (size_t i = 0; i < _pointIdxRadiusSearch.size(); ++i) {
       pt = _cloud_all_map.points[_pointIdxRadiusSearch[i]];
 
-      // 设置最大仰角
-      if ((fabs(pt.z - _odom.pose.pose.position.z) / sensing_horizon) >
-          tan(M_PI / 6.0))
-        continue;
+      if (!use_sphere_sensing) {
+        // 设置最大仰角
+        if ((fabs(pt.z - _odom.pose.pose.position.z) / sensing_horizon) >
+            tan(M_PI / 6.0))
+          continue;
 
-      // 检查点是否在无人机视野内
-      Eigen::Vector3d pt_vec(pt.x - _odom.pose.pose.position.x,
-                             pt.y - _odom.pose.pose.position.y,
-                             pt.z - _odom.pose.pose.position.z);
+        // 检查点是否在无人机视野内
+        Eigen::Vector3d pt_vec(pt.x - _odom.pose.pose.position.x,
+                               pt.y - _odom.pose.pose.position.y,
+                               pt.z - _odom.pose.pose.position.z);
 
-      if (pt_vec.normalized().dot(yaw_vec) < 0.5) continue;
+        if (pt_vec.normalized().dot(yaw_vec) < 0.5) continue;
+      }
 
       _local_map.points.push_back(pt);
     }
@@ -184,12 +194,21 @@ int main(int argc, char** argv) {
   node->declare_parameter("map/y_size", 0.0);
   node->declare_parameter("map/z_size", 0.0);
 
+  node->declare_parameter("use_sphere_sensing", false);
+  node->declare_parameter("sphere_sensing_radius", 5.0);
+
   node->get_parameter("sensing_horizon", sensing_horizon);
   node->get_parameter("sensing_rate", sensing_rate);
   node->get_parameter("estimation_rate", estimation_rate);
   node->get_parameter("map/x_size", _x_size);
   node->get_parameter("map/y_size", _y_size);
   node->get_parameter("map/z_size", _z_size);
+  node->get_parameter("use_sphere_sensing", use_sphere_sensing);
+  node->get_parameter("sphere_sensing_radius", sphere_sensing_radius);
+
+  RCLCPP_INFO(node->get_logger(),
+              "[pcl_render] use_sphere_sensing=%d sphere_sensing_radius=%.2f sensing_horizon=%.2f",
+              static_cast<int>(use_sphere_sensing), sphere_sensing_radius, sensing_horizon);
 
   // 订阅点云数据
   global_map_sub = node->create_subscription<sensor_msgs::msg::PointCloud2>(
